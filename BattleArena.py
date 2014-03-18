@@ -16,20 +16,59 @@ from operator import sub, pow
 
 class Game:
 
-    def __init__(self, w, h, num_agents):
+    def __init__(self, w, h, IAs):
         self.width = w
         self.height = h
         self.items = []
 ##        for i in range(25):
 ##            self.items.append(Item([uniform(0,w), uniform(0,h)], 5))
-##            while out_of_bounds(self.items[-1], w, h):
+##            while self.out_of_bounds(self.items[-1]):
 ##                self.items[-1] = Item([uniform(0,w), uniform(0,h)], 5)
         self.agents = []
-        for i in range(num_agents):
-            self.agents.append(Agent([uniform(0,w), uniform(0,h)], 0, 10))
-            while out_of_bounds(self.agents[-1], w, h):
-                self.agents[-1] = Agent([uniform(0,w), uniform(0,h)], 0, 10)
+        for i in range(len(IAs)):
+            self.agents.append(IAs[i]([uniform(0,w), uniform(0,h)], 0, 10))
+            while self.out_of_bounds(self.agents[-1]):
+                self.agents[-1] = IAs[i]([uniform(0,w), uniform(0,h)], 0, 10)
         self.bullets = []
+
+    def collision(self, obj1, obj2):
+        return sum([element**2 for element in map(sub,obj2.position,obj1.position)]) < (obj1.radius + obj2.radius)**2
+
+    def out_of_bounds(self, obj):
+        radius = min(self.width,self.height)
+        return sum([element**2 for element in map(sub,[radius/2, radius/2],obj.position)]) > (obj.radius - radius/2)**2
+
+    def update(self):
+
+        for agent in self.agents:
+            agent.update()
+            if agent.life <= 0:
+                self.agents.remove(agent)
+        for bullet in self.bullets:
+            bullet.move()
+            if self.out_of_bounds(bullet):
+                self.bullets.remove(bullet)
+        for bullet in self.bullets:
+            for agent in self.agents:
+                if self.collision(bullet, agent):
+                    agent.life -= 1
+                    self.bullets.remove(bullet)
+
+    def draw(self):
+
+        for item in self.items:
+            window.create_oval(item.position[0]-item.radius, item.position[1]-item.radius, item.position[0]+item.radius, item.position[1]+item.radius, fill="green")
+        for agent in self.agents:
+            window.create_oval(agent.position[0]-agent.radius, agent.position[1]-agent.radius, agent.position[0]+agent.radius, agent.position[1]+agent.radius, fill="blue")
+            window.create_line(agent.position[0], agent.position[1], agent.position[0]+agent.radius*cos(-agent.rotation*pi/180), agent.position[1]+agent.radius*sin(-agent.rotation*pi/180), width=2, fill="red")
+            window.create_arc(agent.position[0]-agent.vision_distance,agent.position[1]-agent.vision_distance,agent.position[0]+agent.vision_distance,agent.position[1]+agent.vision_distance, start=agent.rotation-agent.vision_angle/2, extent=agent.vision_angle)
+        for bullet in self.bullets:
+            window.create_oval(bullet.position[0]-bullet.radius, bullet.position[1]-bullet.radius, bullet.position[0]+bullet.radius, bullet.position[1]+bullet.radius, fill="red")
+        window.create_oval(0,0,min(game.width,game.height),min(game.width,game.height))
+        for agent in self.agents:
+            window.create_rectangle(agent.position[0]-agent.radius, agent.position[1]-agent.radius-5, agent.position[0]+agent.radius, agent.position[1]-agent.radius-10, fill="red")
+            window.create_rectangle(agent.position[0]-agent.radius, agent.position[1]-agent.radius-5, agent.position[0]-agent.radius+(agent.life/100.0)*agent.radius*2, agent.position[1]-agent.radius-10, fill="green")
+            window.create_rectangle(agent.position[0]-agent.radius, agent.position[1]-agent.radius-5, agent.position[0]+agent.radius, agent.position[1]-agent.radius-10)
 
 class Agent:
 
@@ -41,7 +80,7 @@ class Agent:
         self.radius = radius
 
         self.max_vision_angle = 180
-        self.min_vision_angle = 1
+        self.min_vision_angle = 5
         self.step_vision_angle = (self.max_vision_angle-self.min_vision_angle)/100.0
         self.max_vision_distance = 500
         self.min_vision_distance = 50
@@ -56,6 +95,7 @@ class Agent:
         norm = sqrt(sum(direction[i]*direction[i] for i in range(len(direction))))
         direction = [ direction[i]/norm  for i in range(len(direction)) ]
         direction = [direction[0]*cos(self.rotation*pi/180) + direction[1]*sin(self.rotation*pi/180), -direction[0]*sin(self.rotation*pi/180) + direction[1]*cos(self.rotation*pi/180)]
+        previous_position = self.position
         self.position = map(sum, zip(self.position, direction))
 
     def rotate(self, sign):
@@ -128,17 +168,15 @@ class Agent:
         enemy = self.view_enemy()
         bullet = self.view_bullet()
         can_shoot = self.shoot_actual > self.shoot_interval
-        return enemy, bullet, can_shoot
+        actual_position = self.position
+        self.move([1,0])
+        out_of_bounds = game.out_of_bounds(self)
+        self.position = actual_position
+        return enemy, bullet, can_shoot, out_of_bounds
 
     def brain(self):
 
-        enemy, bullet, can_shoot = self.get_sensors_info()
-        shot = enemy
-        left = not enemy
-        minus_angle = True
-        forward = right = more_angle = False
-
-        return shot, forward, left, right, more_angle, minus_angle
+        return False, False, False, False, False, False
 
     def update(self):
 
@@ -146,7 +184,8 @@ class Agent:
         if shot:
             self.shoot([1,0])
         if forward:
-            self.move([1,0])
+            if not game.out_of_bounds(self):
+                self.move([1,0])
         if left:
             self.rotate(1)
         if right:
@@ -174,58 +213,122 @@ class Item:
         self.position = position
         self.radius = radius
 
-def collision(obj1, obj2):
-    return sum([element**2 for element in map(sub,obj2.position,obj1.position)]) < (obj1.radius + obj2.radius)**2
-
-def out_of_bounds(obj, w, h):
-    radius = min(w,h)
-    return sum([element**2 for element in map(sub,[radius/2, radius/2],obj.position)]) > (obj.radius - radius/2)**2
-
-def update():
-
-    for agent in game.agents:
-        agent.update()
-        if out_of_bounds(agent, game.width, game.height) or agent.life <= 0:
-            game.agents.remove(agent)
-    for bullet in game.bullets:
-        bullet.move()
-        if out_of_bounds(bullet, game.width, game.height):
-            game.bullets.remove(bullet)
-    for bullet in game.bullets:
-        for agent in game.agents:
-            if collision(bullet, agent):
-                agent.life -= 1
-                game.bullets.remove(bullet)
-
-def draw():
-
-    for item in game.items:
-        window.create_oval(item.position[0]-item.radius, item.position[1]-item.radius, item.position[0]+item.radius, item.position[1]+item.radius, fill="green")
-    for agent in game.agents:
-        window.create_oval(agent.position[0]-agent.radius, agent.position[1]-agent.radius, agent.position[0]+agent.radius, agent.position[1]+agent.radius, fill="blue")
-        window.create_line(agent.position[0], agent.position[1], agent.position[0]+agent.radius*cos(-agent.rotation*pi/180), agent.position[1]+agent.radius*sin(-agent.rotation*pi/180), width=2, fill="red")
-        window.create_arc(agent.position[0]-agent.vision_distance,agent.position[1]-agent.vision_distance,agent.position[0]+agent.vision_distance,agent.position[1]+agent.vision_distance, start=agent.rotation-agent.vision_angle/2, extent=agent.vision_angle)
-    for bullet in game.bullets:
-        window.create_oval(bullet.position[0]-bullet.radius, bullet.position[1]-bullet.radius, bullet.position[0]+bullet.radius, bullet.position[1]+bullet.radius, fill="red")
-    window.create_oval(0,0,min(game.width,game.height),min(game.width,game.height))
-    for agent in game.agents:
-        window.create_rectangle(agent.position[0]-agent.radius, agent.position[1]-agent.radius-5, agent.position[0]+agent.radius, agent.position[1]-agent.radius-10, fill="red")
-        window.create_rectangle(agent.position[0]-agent.radius, agent.position[1]-agent.radius-5, agent.position[0]-agent.radius+(agent.life/100.0)*agent.radius*2, agent.position[1]-agent.radius-10, fill="green")
-        window.create_rectangle(agent.position[0]-agent.radius, agent.position[1]-agent.radius-5, agent.position[0]+agent.radius, agent.position[1]-agent.radius-10)
-
 def step():
 
     window.delete(ALL)
 
-    update()
-    draw()
+    game.update()
+    game.draw()
 
-    master.after(5, step)
+    master.after(1, step)
+
+class Border(Agent):
+
+    def brain(self):
+
+        enemy, bullet, can_shoot, out_of_bounds = self.get_sensors_info()
+        shot = False
+        left = False
+        right = out_of_bounds
+        minus_angle = False
+        forward = not out_of_bounds
+        more_angle = False
+
+        return shot, forward, left, right, more_angle, minus_angle
+
+class Chaser(Agent):
+
+    def brain(self):
+
+        enemy, bullet, can_shoot, out_of_bounds = self.get_sensors_info()
+        shot = enemy
+        left = False
+        right = not enemy
+        minus_angle = True
+        forward = enemy
+        more_angle = False
+
+        return shot, forward, left, right, more_angle, minus_angle
+
+class Avoider(Agent):
+
+    def brain(self):
+
+        enemy, bullet, can_shoot, out_of_bounds = self.get_sensors_info()
+        shot = False
+        left = not bullet
+        right = False
+        minus_angle = False
+        forward = bullet
+        more_angle = False
+
+        return shot, forward, left, right, more_angle, minus_angle
+
+class Learner(Agent):
+
+    def __init__(self, position, rotation, radius):
+
+        Agent.__init__(self, position, rotation, radius)
+        self.ann = ANN(4, 6, [4, 6, 8, 12, 6])
+
+    def brain(self):
+
+        enemy, bullet, can_shoot, out_of_bounds = self.get_sensors_info()
+
+        self.ann.set_input([enemy, bullet, can_shoot, out_of_bounds])
+        shot, forward, left, right, more_angle, minus_angle = self.ann.get_output()
+
+        print shot, forward, left, right, more_angle, minus_angle
+        return shot, forward, left, right, more_angle, minus_angle
+
+class Node:
+
+    def __init__(self, input):
+
+        self.input = input
+        self.output = 0.0
+        self.threeshold = 1.0
+        self.weight = uniform(0.0,1.0)
+        self.calculate()
+
+    def calculate(self):
+        if all(isinstance(n, Node) for n in self.input):
+            net = sum([element.output*element.weight for element in self.input])
+        else:
+            net = sum(self.input)
+        self.output = net >= self.threeshold
+
+class ANN:
+
+    def __init__(self, n_in, n_out, hidden_layers):
+
+        self.layer = [[Node([1.0]) for n in range(n_in)]]
+        for i in range(len(hidden_layers)):
+            self.layer.append([Node(self.layer[-1]) for j in range(hidden_layers[i])])
+        self.layer.append([Node(self.layer[-1]) for j in range(n_out)])
+
+    def get_output(self):
+
+        return [node.output for node in self.layer[-1]]
+
+    def set_input(self, input):
+
+        for i in range(len(self.layer[0])):
+            self.layer[0][i].input = input[i]
+        self.recalculate()
+
+    def recalculate(self):
+
+        for layer in self.layer[1:-1]:
+            for node in layer:
+                node.calculate()
+
 
 def main():
 
-    global game, master, window
-    game = Game(800, 800, 2)
+    global game, master, window, IAs
+    IAs = [Learner, Border]
+    game = Game(800, 800, IAs)
 
     master = Tk()
     window = Canvas(master, width=game.width, height=game.height)
