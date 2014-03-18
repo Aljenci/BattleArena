@@ -52,7 +52,8 @@ class Game:
             for agent in self.agents:
                 if self.collision(bullet, agent):
                     agent.life -= 1
-                    self.bullets.remove(bullet)
+                    if bullet in self.bullets:
+                        self.bullets.remove(bullet)
 
     def draw(self):
 
@@ -82,8 +83,8 @@ class Agent:
         self.max_vision_angle = 180
         self.min_vision_angle = 5
         self.step_vision_angle = (self.max_vision_angle-self.min_vision_angle)/100.0
-        self.max_vision_distance = 500
-        self.min_vision_distance = 50
+        self.max_vision_distance = 800
+        self.min_vision_distance = 100
         self.step_vision_distance = (self.max_vision_distance-self.min_vision_distance)/100.0
         self.vision_distance = self.min_vision_distance
         self.vision_angle = self.max_vision_angle
@@ -134,9 +135,11 @@ class Agent:
             angle = -(180+(atan2(-direction[1], -direction[0])*180/pi)) % 360
             if angle >= self.rotation - self.vision_angle/2.0 and angle <= self.rotation + self.vision_angle/2.0:
                 bullet_position = [self.position[0]+(self.radius)*direction[0], self.position[1]+(self.radius)*direction[1]]
-                bullet_direction = [direction[0]+uniform(-self.vision_angle/4.0,self.vision_angle/4.0)*pi/180, direction[1]+uniform(-self.vision_angle/4.0,self.vision_angle/4.0)*pi/180]
-                norm = sqrt(sum(bullet_direction[i]*bullet_direction[i] for i in range(len(bullet_direction))))
-                bullet_direction = [ bullet_direction[i]/norm  for i in range(len(bullet_direction)) ]
+                # Tiros imprecisos
+                #bullet_direction = [direction[0]+uniform(-self.vision_angle/4.0,self.vision_angle/4.0)*pi/180, direction[1]+uniform(-self.vision_angle/4.0,self.vision_angle/4.0)*pi/180]
+                #norm = sqrt(sum(bullet_direction[i]*bullet_direction[i] for i in range(len(bullet_direction))))
+                #bullet_direction = [ bullet_direction[i]/norm  for i in range(len(bullet_direction)) ]
+                bullet_direction = direction
                 game.bullets.append(Bullet(bullet_position, 2, bullet_direction, 5))
                 self.shoot_actual = 0
 
@@ -149,7 +152,8 @@ class Agent:
                     norm = sqrt(sum(direction[i]*direction[i] for i in range(len(direction))))
                     direction = [ direction[i]/norm  for i in range(len(direction)) ]
                     angle = -(180+(atan2(-direction[1], -direction[0])*180/pi)) % 360
-                    return angle >= self.rotation - self.vision_angle/2.0 and angle <= self.rotation + self.vision_angle/2.0
+                    if angle >= self.rotation - self.vision_angle/2.0 and angle <= self.rotation + self.vision_angle/2.0:
+                        return True
         return False
 
     def view_bullet(self):
@@ -160,7 +164,8 @@ class Agent:
                 norm = sqrt(sum(direction[i]*direction[i] for i in range(len(direction))))
                 direction = [ direction[i]/norm  for i in range(len(direction)) ]
                 angle = -(180+(atan2(-direction[1], -direction[0])*180/pi)) % 360
-                return angle >= self.rotation - self.vision_angle/2.0 and angle <= self.rotation + self.vision_angle/2.0
+                if angle >= self.rotation - self.vision_angle/2.0 and angle <= self.rotation + self.vision_angle/2.0:
+                    return True
         return False
 
     def get_sensors_info(self):
@@ -220,7 +225,7 @@ def step():
     game.update()
     game.draw()
 
-    master.after(1, step)
+    master.after(25, step)
 
 class Border(Agent):
 
@@ -269,7 +274,7 @@ class Learner(Agent):
     def __init__(self, position, rotation, radius):
 
         Agent.__init__(self, position, rotation, radius)
-        self.ann = ANN(4, 6, [4, 6, 8, 12, 6])
+        self.ann = ANN(4, 6, [6, 6])
 
     def brain(self):
 
@@ -278,7 +283,6 @@ class Learner(Agent):
         self.ann.set_input([enemy, bullet, can_shoot, out_of_bounds])
         shot, forward, left, right, more_angle, minus_angle = self.ann.get_output()
 
-        print shot, forward, left, right, more_angle, minus_angle
         return shot, forward, left, right, more_angle, minus_angle
 
 class Node:
@@ -323,11 +327,10 @@ class ANN:
             for node in layer:
                 node.calculate()
 
-
 def main():
 
     global game, master, window, IAs
-    IAs = [Learner, Border]
+    IAs = [Border, Learner, Chaser]
     game = Game(800, 800, IAs)
 
     master = Tk()
