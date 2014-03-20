@@ -225,7 +225,7 @@ def step():
     game.update()
     game.draw()
 
-    master.after(25, step)
+    master.after(1, step)
 
 class Border(Agent):
 
@@ -282,7 +282,7 @@ class Learner(Agent):
 
         self.ann.set_input([enemy, bullet, can_shoot, out_of_bounds])
         shot, forward, left, right, more_angle, minus_angle = self.ann.get_output()
-
+        print shot, forward, left, right, more_angle, minus_angle
         return shot, forward, left, right, more_angle, minus_angle
 
 class Node:
@@ -292,12 +292,12 @@ class Node:
         self.input = input
         self.output = 0.0
         self.threeshold = 1.0
-        self.weight = uniform(0.0,1.0)
+        self.weight = [uniform(0.0,1.0) for e in input]
         self.calculate()
 
     def calculate(self):
         if all(isinstance(n, Node) for n in self.input):
-            net = sum([element.output*element.weight for element in self.input])
+            net = sum([self.input[i].output*self.weight[i] for i in range(len(self.input))])
         else:
             net = sum(self.input)
         self.output = net >= self.threeshold
