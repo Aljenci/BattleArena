@@ -63,6 +63,7 @@ class Game:
             window.create_oval(agent.position[0]-agent.radius, agent.position[1]-agent.radius, agent.position[0]+agent.radius, agent.position[1]+agent.radius, fill="blue")
             window.create_line(agent.position[0], agent.position[1], agent.position[0]+agent.radius*cos(-agent.rotation*pi/180), agent.position[1]+agent.radius*sin(-agent.rotation*pi/180), width=2, fill="red")
             window.create_arc(agent.position[0]-agent.vision_distance,agent.position[1]-agent.vision_distance,agent.position[0]+agent.vision_distance,agent.position[1]+agent.vision_distance, start=agent.rotation-agent.vision_angle/2, extent=agent.vision_angle)
+            window.create_oval(agent.position[0]-agent.radius*2.5, agent.position[1]-agent.radius*2.5, agent.position[0]+agent.radius*2.5, agent.position[1]+agent.radius*2.5)
         for bullet in self.bullets:
             window.create_oval(bullet.position[0]-bullet.radius, bullet.position[1]-bullet.radius, bullet.position[0]+bullet.radius, bullet.position[1]+bullet.radius, fill="red")
         window.create_oval(0,0,min(game.width,game.height),min(game.width,game.height))
@@ -167,6 +168,14 @@ class Agent:
                 if angle >= self.rotation - self.vision_angle/2.0 and angle <= self.rotation + self.vision_angle/2.0:
                     return True
         return False
+		
+    def near_enemy(self):
+
+        for agent in game.agents:
+            if agent != self:
+                if sum([element**2 for element in map(sub,agent.position,self.position)]) < (agent.radius*2.5)**2:
+                    return True
+        return False
 
     def get_sensors_info(self):
 
@@ -177,7 +186,8 @@ class Agent:
         self.move([1,0])
         out_of_bounds = game.out_of_bounds(self)
         self.position = actual_position
-        return enemy, bullet, can_shoot, out_of_bounds
+        close_enemy = self.near_enemy()
+        return enemy, bullet, can_shoot, out_of_bounds, close_enemy
 
     def brain(self):
 
@@ -231,7 +241,7 @@ class Border(Agent):
 
     def brain(self):
 
-        enemy, bullet, can_shoot, out_of_bounds = self.get_sensors_info()
+        enemy, bullet, can_shoot, out_of_bounds, close_enemy = self.get_sensors_info()
         shot = False
         left = False
         right = out_of_bounds
@@ -245,12 +255,12 @@ class Chaser(Agent):
 
     def brain(self):
 
-        enemy, bullet, can_shoot, out_of_bounds = self.get_sensors_info()
+        enemy, bullet, can_shoot, out_of_bounds, close_enemy = self.get_sensors_info()
         shot = enemy
         left = False
         right = not enemy
         minus_angle = True
-        forward = enemy
+        forward = enemy and not close_enemy
         more_angle = False
 
         return shot, forward, left, right, more_angle, minus_angle
@@ -259,7 +269,7 @@ class Avoider(Agent):
 
     def brain(self):
 
-        enemy, bullet, can_shoot, out_of_bounds = self.get_sensors_info()
+        enemy, bullet, can_shoot, out_of_bounds, close_enemy = self.get_sensors_info()
         shot = False
         left = not bullet
         right = False
@@ -278,7 +288,7 @@ class Learner(Agent):
 
     def brain(self):
 
-        enemy, bullet, can_shoot, out_of_bounds = self.get_sensors_info()
+        enemy, bullet, can_shoot, out_of_bounds, close_enemy = self.get_sensors_info()
 
         self.ann.set_input([enemy, bullet, can_shoot, out_of_bounds])
         shot, forward, left, right, more_angle, minus_angle = self.ann.get_output()
@@ -341,4 +351,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
