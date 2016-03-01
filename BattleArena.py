@@ -204,6 +204,8 @@ class Agent:
         if forward:
             if not game.out_of_bounds(self):
                 self.move([1,0])
+                if game.out_of_bounds(self):
+                    self.move([-1,0])
         if left:
             self.rotate(1)
         if right:
